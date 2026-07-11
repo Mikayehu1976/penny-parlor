@@ -64,6 +64,25 @@ window.PP = PP;
     throwHistory.push(mine);
     if (throwHistory.length > 60) throwHistory.shift();
 
+    // ro… sham… bo! — both fists pump before the reveal
+    var youEl = el('rs-thrown-you'), botEl = el('rs-thrown-bot');
+    youEl.textContent = GLYPH.rock;
+    botEl.textContent = GLYPH.rock;
+    youEl.className = 'rs-thrown shaking';
+    botEl.className = 'rs-thrown shaking';
+    el('rs-prompt').textContent = 'Ro… sham… bo!';
+    PP.sound.play('shake');
+
+    var me = S;
+    setTimeout(function () {
+      if (S !== me) return;
+      youEl.className = 'rs-thrown reveal';
+      botEl.className = 'rs-thrown reveal';
+      resolveRound(mine, theirs);
+    }, 900);
+  };
+
+  function resolveRound(mine, theirs) {
     el('rs-thrown-you').textContent = GLYPH[mine];
     el('rs-thrown-bot').textContent = GLYPH[theirs];
 
@@ -85,14 +104,17 @@ window.PP = PP;
     if (mine === theirs) {
       S.pot += 3;
       msgs.unshift('Both throw ' + mine + ' — the pot grows');
+      PP.sound.play('push');
     } else if (BEATS[mine] === theirs) {
       S.you += S.pot;
       msgs.unshift('Your ' + mine + ' takes the pot (' + S.pot + ' pts)');
       S.pot = 3;
+      PP.sound.play('coinBig');
     } else {
       S.them += S.pot;
       msgs.unshift(S.bot.name + '’s ' + theirs + ' takes the pot (' + S.pot + ' pts)');
       S.pot = 3;
+      PP.sound.play('lifeLost');
     }
 
     el('rs-score-you').textContent = S.you;

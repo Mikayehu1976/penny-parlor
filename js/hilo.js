@@ -68,6 +68,7 @@ window.PP = PP;
     // retrigger the flip animation
     void card.offsetWidth;
     card.classList.add('flip');
+    PP.sound.play('flip');
 
     el('hl-lives').textContent = '♥ '.repeat(S.lives).trim() || '—';
     el('hl-pending').textContent = S.pending;
@@ -90,12 +91,18 @@ window.PP = PP;
       if (dir === actual) {
         S.pending += 1;
         msg = 'Called it! ' + S.pending + ' riding — lock them in or press on?';
+        PP.sound.play('coin');
       } else {
         S.lives -= 1;
         msg = S.pending > 0
           ? 'Wrong — ' + S.pending + ' riding card' + (S.pending > 1 ? 's' : '') + ' swept away, and a life with them.'
           : 'Wrong — that costs a life.';
         S.pending = 0;
+        PP.sound.play('lifeLost');
+        var lives = el('hl-lives');
+        lives.classList.remove('hit');
+        void lives.offsetWidth;
+        lives.classList.add('hit');
       }
     }
 
@@ -110,6 +117,7 @@ window.PP = PP;
     var lockedNow = S.pending;
     S.pending = 0;
     S.lives -= 1;
+    PP.sound.play('lock');
     render('Locked in ' + lockedNow + ' — safe forever, but it cost a life.');
     if (S.lives <= 0) endRun();
   };

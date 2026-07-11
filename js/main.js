@@ -17,7 +17,14 @@
   }
 
   function updateHUD() {
-    el('hud-bankroll').textContent = PP.fmtMoney(PP.state.bankroll);
+    var hud = el('hud-bankroll');
+    var text = PP.fmtMoney(PP.state.bankroll);
+    if (hud.textContent !== text) {
+      hud.textContent = text;
+      hud.classList.remove('pop');
+      void hud.offsetWidth;
+      hud.classList.add('pop');
+    }
     var r = PP.rung(PP.state.highWater);
     el('hud-rank').textContent = PP.rankName(r) + ' · Rung ' + r + ' of 30';
     el('bust-notice').classList.toggle('hidden', PP.state.bankroll > 0);
@@ -123,6 +130,10 @@
       honorsBox.appendChild(d);
     });
 
+    PP.sound.play(outcome === 'win' ? 'win' : (outcome === 'lose' ? 'lose' : 'push'));
+    if (earned.length) setTimeout(function () { PP.sound.play('honor'); }, 700);
+    if (outcome === 'win') coinBurst(card);
+
     var rematch = el('btn-rematch');
     if (PP.state.bankroll >= m.stake && m.stake > 0) {
       rematch.classList.remove('hidden');
@@ -133,6 +144,17 @@
 
     updateHUD();
     showScreen('result');
+  }
+
+  function coinBurst(container) {
+    for (var i = 0; i < 12; i++) {
+      var c = document.createElement('span');
+      c.className = 'coin-drop';
+      c.style.left = (6 + Math.random() * 88) + '%';
+      c.style.animationDelay = (Math.random() * 0.55) + 's';
+      container.appendChild(c);
+      setTimeout(function (coin) { return function () { coin.remove(); }; }(c), 2200);
+    }
   }
 
   function forfeit(game) {
@@ -239,7 +261,18 @@
 
   el('btn-sweep').addEventListener('click', function () {
     PP.sweepFloor();
+    PP.sound.play('coin');
     updateHUD();
+  });
+
+  var muteBtn = el('btn-mute');
+  function renderMute() { muteBtn.textContent = PP.sound.isMuted() ? '🔕' : '🔔'; }
+  muteBtn.addEventListener('click', function () { PP.sound.toggleMute(); renderMute(); PP.sound.play('click'); });
+  renderMute();
+
+  // a soft click on every parlor button; games layer their own sounds on top
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.btn, .stake-chip')) PP.sound.play('click');
   });
 
   el('btn-ledger').addEventListener('click', openLedger);

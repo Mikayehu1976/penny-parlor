@@ -46,14 +46,16 @@ window.PP = PP;
     el('gr-score-bot').textContent = S.them;
 
     var bonus = S.bonusOrder[S.round];
-    el('gr-bonus').textContent = bonus;
+    var bonusEl = el('gr-bonus');
+    bonusEl.className = 'nugget bonus wobble';
+    bonusEl.innerHTML = PP.nuggetInner(bonus);
     el('gr-pot').textContent = S.carry > 0
       ? 'Worth ' + (bonus + S.carry) + ' pts (carried gold on the scale!)'
       : 'Worth ' + bonus + ' pts + both bids';
 
     var youPlate = el('gr-played-you'), botPlate = el('gr-played-bot');
-    youPlate.textContent = '?';
-    botPlate.textContent = '?';
+    youPlate.innerHTML = '?';
+    botPlate.innerHTML = '?';
     youPlate.className = 'nugget ghost';
     botPlate.className = 'nugget ghost';
 
@@ -67,7 +69,7 @@ window.PP = PP;
     rack.innerHTML = '';
     S.mine.forEach(function (v) {
       var b = document.createElement('button');
-      b.innerHTML = '<div class="nugget">' + v + '</div>';
+      b.innerHTML = PP.nuggetHTML(v);
       b.disabled = !clickable;
       b.addEventListener('click', function () { playRound(v); });
       rack.appendChild(b);
@@ -76,10 +78,7 @@ window.PP = PP;
     var botRack = el('gr-rack-bot');
     botRack.innerHTML = '';
     S.theirs.forEach(function (v) {
-      var d = document.createElement('div');
-      d.className = 'nugget';
-      d.textContent = v;
-      botRack.appendChild(d);
+      botRack.innerHTML += PP.nuggetHTML(v);
     });
   }
 
@@ -96,28 +95,39 @@ window.PP = PP;
     renderRacks(false);
 
     var youPlate = el('gr-played-you'), botPlate = el('gr-played-bot');
-    youPlate.textContent = myBid;
-    youPlate.className = 'nugget';
-    botPlate.textContent = theirBid;
-    botPlate.className = 'nugget';
+    youPlate.innerHTML = PP.nuggetInner(myBid);
+    youPlate.className = 'nugget toss';
+    botPlate.innerHTML = PP.nuggetInner(theirBid);
+    botPlate.className = 'nugget toss';
+    PP.sound.play('coin');
 
+    var winPlate = null, roundSound = 'push';
     if (myBid > theirBid) {
       var haul = myBid + theirBid + prize;
       S.you += haul;
       S.bestHaul = Math.max(S.bestHaul, haul);
       S.carry = 0;
-      youPlate.classList.add('win');
+      winPlate = youPlate;
+      roundSound = 'coinBig';
       el('gr-prompt').textContent = 'Your ' + myBid + ' beats their ' + theirBid + ' — you haul ' + haul + ' pts!';
     } else if (theirBid > myBid) {
       var theirHaul = myBid + theirBid + prize;
       S.them += theirHaul;
       S.carry = 0;
-      botPlate.classList.add('win');
+      winPlate = botPlate;
+      roundSound = 'lifeLost';
       el('gr-prompt').textContent = S.bot.name + '’s ' + theirBid + ' beats your ' + myBid + ' — they haul ' + theirHaul + ' pts.';
     } else {
       S.carry += bonus;
       el('gr-prompt').textContent = 'Dead heat at ' + myBid + '! Both bids are lost; the gold stays on the scale.';
     }
+
+    var meReveal = S;   // pulse the winner once the toss lands
+    setTimeout(function () {
+      if (S !== meReveal) return;
+      if (winPlate) winPlate.classList.add('win');
+      PP.sound.play(roundSound);
+    }, 480);
 
     el('gr-score-you').textContent = S.you;
     el('gr-score-bot').textContent = S.them;

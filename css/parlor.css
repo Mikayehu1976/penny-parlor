@@ -79,6 +79,36 @@ body {
 
 .rank { font-size: 0.85rem; color: var(--cream-dim); font-style: italic; }
 
+.mute-btn {
+  background: none;
+  border: 1px solid rgba(243, 230, 200, 0.35);
+  border-radius: 8px;
+  font-size: 1.1rem;
+  padding: 6px 10px;
+  cursor: pointer;
+  filter: grayscale(0.2);
+}
+
+.mute-btn:hover { border-color: var(--gold); }
+
+.bankroll.pop { animation: bankroll-pop 0.4s ease-out; }
+
+@keyframes bankroll-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+
+.hl-lives.hit { animation: lives-hit 0.5s ease-out; }
+
+@keyframes lives-hit {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+
 /* ---------------- layout ---------------- */
 
 #app {
@@ -296,36 +326,67 @@ body {
 .plate-tag { font-size: 0.72rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--cream-dim); }
 
 .nugget {
+  position: relative;
   width: 62px;
   height: 62px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
   font-weight: bold;
   color: var(--ink);
-  background: radial-gradient(circle at 32% 28%, #ffe9a8, var(--gold) 55%, #9a6d1f);
-  border: 2px solid #7c5717;
-  box-shadow: 0 4px 10px var(--shadow), inset 0 2px 3px rgba(255, 255, 255, 0.5);
   user-select: none;
 }
 
-.nugget.bonus {
-  width: 74px;
-  height: 74px;
-  font-size: 1.8rem;
-  box-shadow: 0 0 22px rgba(240, 195, 104, 0.55), 0 4px 10px var(--shadow), inset 0 2px 3px rgba(255, 255, 255, 0.5);
+.nugget svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.45));
+}
+
+.nugget-num {
+  position: relative;
+  z-index: 1;
+  font-size: 1.35rem;
+  font-weight: bold;
+  color: #4a2e05;
+  text-shadow: 0 1px 0 rgba(255, 248, 220, 0.7);
+}
+
+.nugget.bonus { width: 78px; height: 78px; }
+.nugget.bonus svg { filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 14px rgba(240, 195, 104, 0.75)); }
+.nugget.bonus .nugget-num { font-size: 1.7rem; }
+
+.nugget.wobble { animation: wobble 2.6s ease-in-out infinite; }
+
+@keyframes wobble {
+  0%, 100% { transform: rotate(-4deg); }
+  50%      { transform: rotate(5deg); }
 }
 
 .nugget.ghost {
+  border-radius: 50%;
   background: radial-gradient(circle at 32% 28%, #24422f, #122619);
   color: var(--cream-dim);
   border: 2px dashed rgba(217, 164, 65, 0.5);
-  box-shadow: none;
 }
 
-.nugget.win { outline: 3px solid var(--gold-bright); outline-offset: 3px; }
+.nugget.toss { animation: toss-in 0.45s cubic-bezier(0.25, 1.4, 0.5, 1); }
+
+@keyframes toss-in {
+  0%   { transform: translateY(-46px) rotate(-160deg) scale(0.4); opacity: 0; }
+  60%  { opacity: 1; }
+  100% { transform: none; }
+}
+
+.nugget.win { animation: winner-pulse 0.55s ease-in-out 2; }
+
+@keyframes winner-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.18); filter: brightness(1.35); }
+}
 
 .nugget-rack {
   display: flex;
@@ -344,7 +405,8 @@ body {
 .nugget-rack button:hover:not(:disabled) { transform: translateY(-4px); }
 .nugget-rack button:disabled { opacity: 0.25; cursor: default; }
 
-.nugget-rack.small .nugget { width: 34px; height: 34px; font-size: 0.9rem; }
+.nugget-rack.small .nugget { width: 34px; height: 34px; }
+.nugget-rack.small .nugget-num { font-size: 0.78rem; }
 
 .gr-theirs { text-align: center; margin-top: 18px; }
 .gr-theirs .plate-tag { display: block; margin-bottom: 6px; }
@@ -462,6 +524,22 @@ body {
 
 .rs-vs { font-variant: small-caps; letter-spacing: 2px; color: var(--cream-dim); }
 
+.rs-thrown.shaking { animation: fist-shake 0.85s ease-in-out; }
+
+@keyframes fist-shake {
+  0%, 26%, 52%, 78% { transform: translateY(0); }
+  13%, 39%, 65%     { transform: translateY(-16px); }
+  100%              { transform: translateY(0); }
+}
+
+.rs-thrown.reveal { animation: throw-pop 0.25s ease-out; }
+
+@keyframes throw-pop {
+  0%   { transform: scale(0.5); }
+  70%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
 .btn-hand {
   display: flex;
   flex-direction: column;
@@ -483,6 +561,8 @@ body {
   max-width: 480px;
   margin: 30px auto;
   text-align: center;
+  position: relative;
+  overflow: hidden;
   background: linear-gradient(180deg, rgba(58, 36, 21, 0.92), rgba(36, 20, 8, 0.92));
   border: 2px solid var(--gold);
   border-radius: 16px;
@@ -503,6 +583,23 @@ body {
 .result-card p { color: var(--cream-dim); font-style: italic; margin-bottom: 14px; line-height: 1.5; }
 
 .result-bankroll { font-size: 1.6rem; color: var(--gold-bright); font-weight: bold; margin-bottom: 6px; }
+
+.coin-drop {
+  position: absolute;
+  top: -24px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #ffe9a8, var(--gold) 55%, #9a6d1f);
+  border: 1px solid #7c5717;
+  animation: coin-fall 1.3s ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes coin-fall {
+  0%   { transform: translateY(0) rotate(0); opacity: 1; }
+  100% { transform: translateY(420px) rotate(680deg); opacity: 0.15; }
+}
 
 .honor-toast {
   margin: 10px auto 0;
@@ -596,6 +693,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .screen, .playing-card.flip { animation: none; }
+  .screen, .playing-card.flip, .nugget.toss, .nugget.win, .nugget.wobble,
+  .rs-thrown.shaking, .rs-thrown.reveal, .bankroll.pop, .hl-lives.hit, .coin-drop { animation: none; }
   .btn, .stake-chip, .nugget-rack button { transition: none; }
 }

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Penny Parlor — double a penny, win the room</title>
+<meta name="description" content="Penny Parlor: a play-money parlor of quick head-to-head games. Start with a penny, double your way up. No real money, ever.">
+<link rel="stylesheet" href="css/parlor.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23d9a441'/><text x='50' y='68' font-size='55' text-anchor='middle' font-family='Georgia' fill='%233a2415'>¢</text></svg>">
+</head>
+<body>
+
+<header class="marquee">
+  <div class="marquee-inner">
+    <h1 class="logo">✦ Penny <span>Parlor</span> ✦</h1>
+    <div class="wallet">
+      <div class="bankroll" id="hud-bankroll">p$0.01</div>
+      <div class="rank" id="hud-rank">Greenhorn · Rung 0 of 30</div>
+    </div>
+  </div>
+</header>
+
+<main id="app">
+
+  <!-- ============ LOBBY ============ -->
+  <section class="screen" id="screen-lobby">
+    <p class="tagline">Start with a penny. Double it thirty times and that’s ten million.<br>Nobody’s ever done it. You could be first.</p>
+
+    <div id="bust-notice" class="bust-notice hidden">
+      <p>Cleaned out! Every legend hits the felt once.</p>
+      <button class="btn btn-gold" id="btn-sweep">🧹 Sweep the floor (+1¢)</button>
+    </div>
+
+    <div class="tables">
+      <article class="table-card" data-game="goldrush">
+        <div class="table-emblem">⚖️</div>
+        <h2>Gold Rush</h2>
+        <p>Six nuggets, six blind bids. Take the scale, take the gold.</p>
+        <div class="table-actions">
+          <button class="btn btn-gold btn-play" data-game="goldrush">Sit down</button>
+          <button class="btn btn-quiet btn-rules" data-game="goldrush">Rules</button>
+        </div>
+      </article>
+
+      <article class="table-card" data-game="hilo">
+        <div class="table-emblem">🂡</div>
+        <h2>Hi-Lo</h2>
+        <p>Call the next card, ride the streak, and lock it in before you bust.</p>
+        <div class="table-actions">
+          <button class="btn btn-gold btn-play" data-game="hilo">Sit down</button>
+          <button class="btn btn-quiet btn-rules" data-game="hilo">Rules</button>
+        </div>
+      </article>
+
+      <article class="table-card" data-game="rsbfu">
+        <div class="table-emblem">🥋</div>
+        <h2>Ro-Sham-Bo-Fu</h2>
+        <p>The ancient art of rock, paper, scissors — with a forbidden hand.</p>
+        <div class="table-actions">
+          <button class="btn btn-gold btn-play" data-game="rsbfu">Sit down</button>
+          <button class="btn btn-quiet btn-rules" data-game="rsbfu">Rules</button>
+        </div>
+      </article>
+    </div>
+
+    <div class="lobby-footer">
+      <button class="btn btn-quiet" id="btn-ledger">📜 Ledger &amp; Honors</button>
+    </div>
+  </section>
+
+  <!-- ============ STAKE PICKER ============ -->
+  <section class="screen hidden" id="screen-stake">
+    <h2 class="screen-title" id="stake-title">Name your stake</h2>
+    <p class="screen-sub">Winner takes all. Win and your stake doubles; lose and it’s gone.</p>
+    <div class="stake-grid" id="stake-grid"></div>
+    <div class="opponent-card" id="opponent-card"></div>
+    <div class="row-center">
+      <button class="btn btn-quiet" id="btn-stake-back">← Back to the lobby</button>
+      <button class="btn btn-gold" id="btn-stake-go" disabled>Deal me in</button>
+    </div>
+  </section>
+
+  <!-- ============ GOLD RUSH ============ -->
+  <section class="screen hidden" id="screen-goldrush">
+    <div class="match-head">
+      <div class="side you"><span class="side-name">You</span><span class="side-score" id="gr-score-you">0</span></div>
+      <div class="match-mid">
+        <div class="round-label" id="gr-round">Round 1 of 6</div>
+        <div class="pot-label" id="gr-pot"></div>
+      </div>
+      <div class="side them"><span class="side-name" id="gr-bot-name">Rusty</span><span class="side-score" id="gr-score-bot">0</span></div>
+    </div>
+
+    <div class="gr-scale">
+      <div class="gr-plate" id="gr-plate-you"><span class="plate-tag">your bid</span><div class="nugget ghost" id="gr-played-you">?</div></div>
+      <div class="gr-bonus">
+        <span class="plate-tag">on the scale</span>
+        <div class="nugget bonus" id="gr-bonus">?</div>
+      </div>
+      <div class="gr-plate" id="gr-plate-bot"><span class="plate-tag">their bid</span><div class="nugget ghost" id="gr-played-bot">?</div></div>
+    </div>
+
+    <p class="prompt" id="gr-prompt">Pick a nugget to bid.</p>
+    <div class="nugget-rack" id="gr-rack"></div>
+    <div class="gr-theirs">
+      <span class="plate-tag">their pouch</span>
+      <div class="nugget-rack small" id="gr-rack-bot"></div>
+    </div>
+    <div class="row-center"><button class="btn btn-quiet btn-forfeit" data-game="goldrush">Forfeit match</button></div>
+  </section>
+
+  <!-- ============ HI-LO ============ -->
+  <section class="screen hidden" id="screen-hilo">
+    <div class="match-head">
+      <div class="side you"><span class="side-name">You</span><span class="side-score" id="hl-score-you">0 banked</span></div>
+      <div class="match-mid"><div class="round-label" id="hl-phase">Your run</div></div>
+      <div class="side them"><span class="side-name" id="hl-bot-name">Rusty</span><span class="side-score" id="hl-score-bot">waiting</span></div>
+    </div>
+
+    <div class="hl-table">
+      <div class="hl-status">
+        <div class="hl-lives" id="hl-lives">♥ ♥ ♥</div>
+        <div class="hl-pending">Riding: <b id="hl-pending">0</b></div>
+      </div>
+      <div class="playing-card" id="hl-card"><span class="card-rank">?</span><span class="card-suit"></span></div>
+      <p class="prompt" id="hl-prompt">Will the next card be higher or lower?</p>
+      <div class="row-center hl-controls">
+        <button class="btn btn-gold" id="hl-higher">▲ Higher</button>
+        <button class="btn btn-gold" id="hl-lower">▼ Lower</button>
+        <button class="btn btn-brass" id="hl-lock" title="Bank your riding cards. Costs one life.">🔒 Lock (−1 ♥)</button>
+      </div>
+      <div class="hl-botrun hidden" id="hl-botrun"></div>
+    </div>
+    <div class="row-center"><button class="btn btn-quiet btn-forfeit" data-game="hilo">Forfeit match</button></div>
+  </section>
+
+  <!-- ============ RO-SHAM-BO-FU ============ -->
+  <section class="screen hidden" id="screen-rsbfu">
+    <div class="match-head">
+      <div class="side you"><span class="side-name">You</span><span class="side-score" id="rs-score-you">0</span></div>
+      <div class="match-mid">
+        <div class="round-label" id="rs-round">Round 1 of 6</div>
+        <div class="pot-label" id="rs-pot">Pot: 3 pts</div>
+      </div>
+      <div class="side them"><span class="side-name" id="rs-bot-name">Rusty</span><span class="side-score" id="rs-score-bot">0</span></div>
+    </div>
+
+    <div class="rs-forbidden">
+      <span class="plate-tag">the forbidden hand</span>
+      <div class="rs-forbidden-hand" id="rs-forbidden">✊</div>
+      <span class="rs-forbidden-note">avoid it for +2 honor</span>
+    </div>
+
+    <div class="rs-arena">
+      <div class="rs-thrown" id="rs-thrown-you">–</div>
+      <div class="rs-vs">vs</div>
+      <div class="rs-thrown" id="rs-thrown-bot">–</div>
+    </div>
+
+    <p class="prompt" id="rs-prompt">Choose your hand.</p>
+    <div class="row-center rs-controls">
+      <button class="btn btn-hand" data-hand="rock">✊<span>Rock</span></button>
+      <button class="btn btn-hand" data-hand="paper">✋<span>Paper</span></button>
+      <button class="btn btn-hand" data-hand="scissors">✌️<span>Scissors</span></button>
+    </div>
+    <div class="row-center"><button class="btn btn-quiet btn-forfeit" data-game="rsbfu">Forfeit match</button></div>
+  </section>
+
+  <!-- ============ RESULT ============ -->
+  <section class="screen hidden" id="screen-result">
+    <div class="result-card" id="result-card">
+      <h2 id="result-headline">You won!</h2>
+      <p id="result-detail"></p>
+      <div class="result-bankroll" id="result-bankroll"></div>
+      <div id="result-achievements"></div>
+      <div class="row-center">
+        <button class="btn btn-gold" id="btn-rematch">Same table, same stake</button>
+        <button class="btn btn-quiet" id="btn-to-lobby">Back to the lobby</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ MODAL ============ -->
+<div class="modal-backdrop hidden" id="modal">
+  <div class="modal-card">
+    <button class="modal-close" id="modal-close">✕</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<footer class="colophon">
+  <p>Play money only — nothing to buy, nothing to cash out. A loving revival of the lost games of Moola.com (2006–2011).</p>
+</footer>
+
+<script src="js/state.js"></script>
+<script src="js/bots.js"></script>
+<script src="js/goldrush.js"></script>
+<script src="js/hilo.js"></script>
+<script src="js/rsbfu.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Penny Parlor — Scale Lab</title>
+<style>
+  :root {
+    --wood: #3a2415; --wood-dark: #241408; --gold: #d9a441; --gold-bright: #f0c368;
+    --cream: #f3e6c8; --cream-dim: #cdbd9a; --ink: #2b1c10; --serif: Georgia, 'Times New Roman', serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--serif); color: var(--cream); min-height: 100vh;
+    background: radial-gradient(ellipse at 50% 40%, #0e2f1f 0%, #081d12 85%);
+    padding: 26px 16px 60px;
+  }
+  h1 { text-align: center; font-variant: small-caps; letter-spacing: 2px; color: var(--gold-bright); }
+  .sub { text-align: center; font-style: italic; color: var(--cream-dim); margin: 8px 0 30px; }
+  .lab { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 22px; max-width: 1180px; margin: 0 auto; }
+  .rig {
+    border: 2px solid #5a3a20; border-radius: 14px; overflow: hidden;
+    background: linear-gradient(180deg, rgba(58,36,21,.9), rgba(36,20,8,.9));
+    box-shadow: 0 8px 24px rgba(0,0,0,.45); display: flex; flex-direction: column;
+  }
+  .rig h2 { font-variant: small-caps; letter-spacing: 1.5px; color: var(--gold-bright); font-size: 1.2rem; padding: 14px 16px 2px; }
+  .rig .blurb { color: var(--cream-dim); font-style: italic; font-size: .88rem; padding: 0 16px 10px; min-height: 3em; }
+  .stage { width: 100%; display: block; }
+  .controls { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; flex-wrap: wrap; }
+  select, button {
+    font-family: var(--serif); font-size: 1rem; padding: 8px 12px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--wood-dark);
+  }
+  select { background: #17402b; color: var(--cream); border-color: #a8792e; }
+  button {
+    background: linear-gradient(180deg, var(--gold-bright), #a8792e); color: var(--ink); font-weight: bold;
+  }
+  button:hover { filter: brightness(1.08); }
+  .verdict { text-align: center; min-height: 1.5em; color: var(--cream); font-style: italic; padding-bottom: 14px; }
+  .foot { text-align: center; color: var(--cream-dim); font-style: italic; margin-top: 30px; }
+</style>
+</head>
+<body>
+
+<h1>⚖️ The Scale Lab</h1>
+<p class="sub">Three candidate scales for Gold Rush. Set two bids, hit <b>Weigh!</b>, and watch how each one moves.<br>
+Pick your favorite: A, B, or C.</p>
+
+<div class="lab" id="lab"></div>
+
+<p class="foot">Every rig uses the same spring physics engine with different tuning — stiffness, damping, tilt, squash.</p>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- shared cartoon nugget ---------- */
+  var NUGGET_PATH = 'M50 7 L80 16 L93 48 L79 84 L44 93 L14 75 L7 38 Z';
+  function nuggetGroup(svg, scale) {
+    var g = mk('g');
+    g.innerHTML =
+      '<path d="' + NUGGET_PATH + '" fill="#e8ac3a" stroke="#6b4a12" stroke-width="7" stroke-linejoin="round"/>' +
+      '<polygon points="42,44 64,38 68,56 46,62" fill="#f0bd50"/>' +
+      '<polygon points="30,20 52,15 42,34 24,36" fill="#f7cf6f"/>' +
+      '<polygon points="68,62 84,50 76,80 54,86" fill="#c58a22"/>' +
+      '<path d="M70 14 L73 22 L81 25 L73 28 L70 36 L67 28 L59 25 L67 22 Z" fill="#fffbe8"/>' +
+      '<text x="50" y="66" text-anchor="middle" font-family="Georgia" font-size="42" font-weight="bold" fill="#4a2e05"></text>';
+    return g;
+  }
+
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  function mk(tag, attrs) {
+    var n = document.createElementNS(SVGNS, tag);
+    if (attrs) for (var k in attrs) n.setAttribute(k, attrs[k]);
+    return n;
+  }
+
+  /* ---------- the three rigs ---------- */
+  var RIGS = [
+    {
+      key: 'A', name: 'A — Brass & Chains',
+      blurb: 'An elegant apothecary balance. Pans hang on chains, the beam settles with a slow, weighty sway.',
+      sky: ['#123a26', '#0c2718'], ground: '#0a2015', groundLine: '#1c4a30',
+      post: '#8a6524', postDark: '#6b4a12', beam: '#c9a25c', beamEdge: '#6b4a12',
+      pan: '#d9a441', panEdge: '#6b4a12', chain: 'chain', chainColor: '#c9a25c',
+      maxTilt: 12, tiltPer: 3.2, spring: { k: 9, c: 4.2 }, squash: 0, dropMs: 500
+    },
+    {
+      key: 'B', name: 'B — The Prospector (cartoon)',
+      blurb: 'Big sky, wooden rig, rope-hung pans. Nuggets squash when they land and the beam boings before it settles. Closest in spirit to old Moola.',
+      sky: ['#7ec8e3', '#cfeef7'], ground: '#c98f4e', groundLine: '#9a6a33',
+      hills: true,
+      post: '#8a5a2b', postDark: '#5f3c18', beam: '#a8703a', beamEdge: '#5f3c18',
+      pan: '#e8ac3a', panEdge: '#6b4a12', chain: 'rope', chainColor: '#b08050',
+      maxTilt: 16, tiltPer: 4.0, spring: { k: 22, c: 2.6 }, squash: 1, dropMs: 420,
+      inkText: true
+    },
+    {
+      key: 'C', name: 'C — Saloon Iron',
+      blurb: 'A crisp wrought-iron counter scale in the current theme. Quick, precise tilt with almost no bounce — all business.',
+      sky: ['#0e2f1f', '#081d12'], ground: '#241408', groundLine: '#3a2415',
+      post: '#2a2a2e', postDark: '#101012', beam: '#3d3d44', beamEdge: '#101012',
+      pan: '#4a4a52', panEdge: '#101012', chain: 'rod', chainColor: '#3d3d44',
+      maxTilt: 10, tiltPer: 2.8, spring: { k: 30, c: 9.5 }, squash: 0, dropMs: 380,
+      goldTrim: '#d9a441'
+    }
+  ];
+
+  var W = 340, H = 240, PIVOT = { x: 170, y: 62 }, HALF = 100, HANG = 46;
+
+  function buildRig(cfg) {
+    var card = document.createElement('div');
+    card.className = 'rig';
+    card.innerHTML = '<h2>' + cfg.name + '</h2><p class="blurb">' + cfg.blurb + '</p>';
+
+    var svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, 'class': 'stage' });
+    card.appendChild(svg);
+
+    /* backdrop */
+    var defs = mk('defs');
+    defs.innerHTML =
+      '<linearGradient id="sky' + cfg.key + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="' + cfg.sky[0] + '"/><stop offset="1" stop-color="' + cfg.sky[1] + '"/></linearGradient>';
+    svg.appendChild(defs);
+    svg.appendChild(mk('rect', { x: 0, y: 0, width: W, height: H, fill: 'url(#sky' + cfg.key + ')' }));
+    if (cfg.hills) {
+      svg.appendChild(mk('path', { d: 'M0 175 Q60 130 130 168 T340 160 L340 240 L0 240 Z', fill: '#8fbf6a' }));
+      svg.appendChild(mk('path', { d: 'M0 190 Q100 150 200 185 T340 180 L340 240 L0 240 Z', fill: '#6da34f' }));
+      /* a little cartoon sun */
+      svg.appendChild(mk('circle', { cx: 300, cy: 36, r: 18, fill: '#ffd95e', stroke: '#e8ac3a', 'stroke-width': 3 }));
+    }
+    svg.appendChild(mk('rect', { x: 0, y: 208, width: W, height: 32, fill: cfg.ground }));
+    svg.appendChild(mk('rect', { x: 0, y: 206, width: W, height: 3, fill: cfg.groundLine }));
+
+    /* post + plinth */
+    svg.appendChild(mk('path', {
+      d: 'M' + (PIVOT.x - 9) + ' ' + PIVOT.y + ' L' + (PIVOT.x + 9) + ' ' + PIVOT.y +
+         ' L' + (PIVOT.x + 20) + ' 206 L' + (PIVOT.x - 20) + ' 206 Z',
+      fill: cfg.post, stroke: cfg.postDark, 'stroke-width': 3, 'stroke-linejoin': 'round'
+    }));
+    svg.appendChild(mk('rect', { x: PIVOT.x - 42, y: 198, width: 84, height: 12, rx: 4, fill: cfg.post, stroke: cfg.postDark, 'stroke-width': 3 }));
+    if (cfg.goldTrim) svg.appendChild(mk('rect', { x: PIVOT.x - 42, y: 198, width: 84, height: 3, fill: cfg.goldTrim }));
+
+    /* beam (rotates) */
+    var beam = mk('g');
+    beam.appendChild(mk('rect', {
+      x: PIVOT.x - HALF, y: PIVOT.y - 5, width: HALF * 2, height: 10, rx: 5,
+      fill: cfg.beam, stroke: cfg.beamEdge, 'stroke-width': 3
+    }));
+    beam.appendChild(mk('circle', { cx: PIVOT.x, cy: PIVOT.y, r: 8, fill: cfg.beam, stroke: cfg.beamEdge, 'stroke-width': 3 }));
+    svg.appendChild(beam);
+
+    /* hangers: chains/ropes/rods + pans + nuggets, repositioned every frame */
+    function makeSide() {
+      var g = mk('g');
+      var l1 = mk('line', { stroke: cfg.chainColor, 'stroke-width': cfg.chain === 'rope' ? 4 : 2.5 });
+      var l2 = mk('line', { stroke: cfg.chainColor, 'stroke-width': cfg.chain === 'rope' ? 4 : 2.5 });
+      if (cfg.chain === 'chain') { l1.setAttribute('stroke-dasharray', '4 3'); l2.setAttribute('stroke-dasharray', '4 3'); }
+      if (cfg.chain === 'rod') { l2.setAttribute('display', 'none'); l1.setAttribute('stroke-width', 5); }
+      g.appendChild(l1); g.appendChild(l2);
+      var pan = mk('path', { fill: cfg.pan, stroke: cfg.panEdge, 'stroke-width': 3, 'stroke-linejoin': 'round' });
+      g.appendChild(pan);
+      var nug = nuggetGroup(svg);
+      nug.setAttribute('display', 'none');
+      g.appendChild(nug);
+      svg.appendChild(g);
+      return { l1: l1, l2: l2, pan: pan, nug: nug, text: nug.querySelector('text') };
+    }
+    var left = makeSide(), right = makeSide();
+
+    /* physics + per-frame layout */
+    var angle = 0, vel = 0, target = 0;
+    var drops = [];          // active nugget drop animations
+    var raf = null, lastT = null;
+
+    function panPath(cx, cy) {
+      return 'M' + (cx - 30) + ' ' + cy + ' Q' + cx + ' ' + (cy + 20) + ' ' + (cx + 30) + ' ' + cy + ' Z';
+    }
+
+    function layoutSide(side, sign, now) {
+      var rad = angle * Math.PI / 180;
+      var ex = PIVOT.x + Math.cos(rad) * HALF * sign;
+      var ey = PIVOT.y + Math.sin(rad) * HALF * sign;
+      var px = ex, py = ey + HANG;
+      side.l1.setAttribute('x1', ex); side.l1.setAttribute('y1', ey);
+      side.l1.setAttribute('x2', px - (side.l2.getAttribute('display') === 'none' ? 0 : 16)); side.l1.setAttribute('y2', py);
+      side.l2.setAttribute('x1', ex); side.l2.setAttribute('y1', ey);
+      side.l2.setAttribute('x2', px + 16); side.l2.setAttribute('y2', py);
+      side.pan.setAttribute('d', panPath(px, py));
+
+      if (side.dropStart !== undefined) {
+        var sc = 0.38;
+        var t = Math.min(1, Math.max(0, (now - side.dropStart) / cfg.dropMs));
+        var yFrom = -40, yTo = py - 38 * sc * 2 + 2;
+        var y = yFrom + (yTo - yFrom) * t * t;   // gravity-ish ease-in
+        var squash = 1;
+        if (t >= 1 && cfg.squash) {
+          var st = Math.min(1, (now - side.dropStart - cfg.dropMs) / 160);
+          squash = 1 - 0.22 * Math.sin(st * Math.PI);
+        }
+        side.nug.setAttribute('display', '');
+        side.nug.setAttribute('transform',
+          'translate(' + (px - 50 * sc) + ' ' + y + ') scale(' + sc + ' ' + (sc * squash) + ')');
+        if (t >= 1 && !side.landed) { side.landed = true; onLanded(); }
+      } else {
+        side.nug.setAttribute('display', 'none');
+      }
+    }
+
+    var pendingTilt = 0, landCount = 0;
+    function onLanded() {
+      landCount += 1;
+      if (landCount === 2) target = pendingTilt;   // both nuggets down: let it tip
+    }
+
+    function frame(now) {
+      if (lastT === null) lastT = now;
+      var dt = Math.min(0.02, (now - lastT) / 1000);   // cap the step: keeps the spring stable after tab-switches
+      lastT = now;
+      var acc = -cfg.spring.k * (angle - target) - cfg.spring.c * vel;
+      vel += acc * dt * 10;
+      angle += vel * dt * 10;
+      beam.setAttribute('transform', 'rotate(' + angle + ' ' + PIVOT.x + ' ' + PIVOT.y + ')');
+      layoutSide(left, -1, now);
+      layoutSide(right, 1, now);
+      raf = requestAnimationFrame(frame);
+    }
+    raf = requestAnimationFrame(frame);
+
+    /* controls */
+    var controls = document.createElement('div');
+    controls.className = 'controls';
+    function sel() {
+      var s = document.createElement('select');
+      for (var i = 1; i <= 6; i++) {
+        var o = document.createElement('option');
+        o.value = i; o.textContent = i;
+        s.appendChild(o);
+      }
+      return s;
+    }
+    var selYou = sel(), selThem = sel();
+    selYou.value = 5; selThem.value = 2;
+    var btn = document.createElement('button');
+    btn.textContent = 'Weigh!';
+    var labelYou = document.createElement('span'); labelYou.textContent = 'You:';
+    var labelThem = document.createElement('span'); labelThem.textContent = 'Them:';
+    controls.appendChild(labelYou); controls.appendChild(selYou);
+    controls.appendChild(labelThem); controls.appendChild(selThem);
+    controls.appendChild(btn);
+    card.appendChild(controls);
+
+    var verdict = document.createElement('p');
+    verdict.className = 'verdict';
+    card.appendChild(verdict);
+
+    function weigh(you, them) {
+      target = 0; angle = 0; vel = 0; landCount = 0;
+      left.dropStart = undefined; right.dropStart = undefined;
+      left.landed = false; right.landed = false;
+      verdict.textContent = '';
+      var now = performance.now();
+      left.text.textContent = you;
+      right.text.textContent = them;
+      left.dropStart = now + 60;
+      right.dropStart = now + 140;
+      // left pan = you; heavier side sinks (negative rotation drops the left end)
+      var diff = you - them;
+      pendingTilt = Math.max(-cfg.maxTilt, Math.min(cfg.maxTilt, -diff * cfg.tiltPer));
+      setTimeout(function () {
+        verdict.textContent = diff > 0 ? 'Your ' + you + ' outweighs their ' + them + '!'
+          : diff < 0 ? 'Their ' + them + ' outweighs your ' + you + '.'
+          : 'Perfectly balanced — dead heat.';
+      }, cfg.dropMs + 900);
+    }
+
+    btn.addEventListener('click', function () { weigh(+selYou.value, +selThem.value); });
+
+    /* auto demo on load, staggered so the page comes alive */
+    setTimeout(function () { weigh(+selYou.value, +selThem.value); }, 700 + Math.random() * 900);
+
+    return card;
+  }
+
+  var lab = document.getElementById('lab');
+  RIGS.forEach(function (cfg) { lab.appendChild(buildRig(cfg)); });
+})();
+</script>
+</body>
+</html>

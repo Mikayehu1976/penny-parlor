@@ -313,15 +313,18 @@ body {
 
 /* ---------------- gold rush ---------------- */
 
-.gr-scale {
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 30px;
-  padding: 18px 0 6px;
+.gr-stage {
+  max-width: 430px;
+  margin: 0 auto 6px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 2px solid var(--wood-light);
+  outline: 1px solid rgba(217, 164, 65, 0.35);
+  outline-offset: -5px;
+  box-shadow: 0 8px 22px var(--shadow);
 }
 
-.gr-plate, .gr-bonus { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.gr-stage svg { display: block; width: 100%; height: auto; }
 
 .plate-tag { font-size: 0.72rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--cream-dim); }
 

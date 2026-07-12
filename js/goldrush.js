@@ -1,8 +1,9 @@
 /* Penny Parlor — Gold Rush.
    Six rounds. Each player holds nuggets 1-6 and blind-bids one per round.
-   A bonus nugget sits on the scale each round; the higher bid takes the
-   value of BOTH bids plus the bonus (plus anything carried from ties).
-   Ties discard the bids and carry the bonus forward. Most points wins. */
+   A bonus nugget hovers over the prospector's scale; both bids drop into
+   the pans and the beam tips toward the heavier. The winner hauls in both
+   bids plus the bonus (plus anything carried from ties). Ties discard the
+   bids and leave the bonus hanging. Most points wins. */
 
 var PP = window.PP || {};
 window.PP = PP;
@@ -37,6 +38,7 @@ window.PP = PP;
       locked: false
     };
     el('gr-bot-name').textContent = bot.name;
+    PP.scale.init(el('gr-scale-stage'));
     renderRound();
   };
 
@@ -46,18 +48,11 @@ window.PP = PP;
     el('gr-score-bot').textContent = S.them;
 
     var bonus = S.bonusOrder[S.round];
-    var bonusEl = el('gr-bonus');
-    bonusEl.className = 'nugget bonus wobble';
-    bonusEl.innerHTML = PP.nuggetInner(bonus);
+    PP.scale.reset();
+    PP.scale.setBonus(bonus, S.carry);
     el('gr-pot').textContent = S.carry > 0
       ? 'Worth ' + (bonus + S.carry) + ' pts (carried gold on the scale!)'
       : 'Worth ' + bonus + ' pts + both bids';
-
-    var youPlate = el('gr-played-you'), botPlate = el('gr-played-bot');
-    youPlate.innerHTML = '?';
-    botPlate.innerHTML = '?';
-    youPlate.className = 'nugget ghost';
-    botPlate.className = 'nugget ghost';
 
     el('gr-prompt').textContent = 'Pick a nugget to bid against ' + S.bot.name + '.';
     renderRacks(true);
@@ -94,51 +89,48 @@ window.PP = PP;
     S.theirs.splice(S.theirs.indexOf(theirBid), 1);
     renderRacks(false);
 
-    var youPlate = el('gr-played-you'), botPlate = el('gr-played-bot');
-    youPlate.innerHTML = PP.nuggetInner(myBid);
-    youPlate.className = 'nugget toss';
-    botPlate.innerHTML = PP.nuggetInner(theirBid);
-    botPlate.className = 'nugget toss';
-    PP.sound.play('coin');
+    el('gr-prompt').textContent = 'Onto the scale…';
+    PP.sound.play('shake');
 
-    var winPlate = null, roundSound = 'push';
+    var me = S;   // ignore the settle if the match was forfeited or replaced
+    PP.scale.weigh(myBid, theirBid, function () {
+      if (S !== me) return;
+      settleRound(myBid, theirBid, bonus, prize);
+    });
+  }
+
+  function settleRound(myBid, theirBid, bonus, prize) {
     if (myBid > theirBid) {
       var haul = myBid + theirBid + prize;
       S.you += haul;
       S.bestHaul = Math.max(S.bestHaul, haul);
       S.carry = 0;
-      winPlate = youPlate;
-      roundSound = 'coinBig';
-      el('gr-prompt').textContent = 'Your ' + myBid + ' beats their ' + theirBid + ' — you haul ' + haul + ' pts!';
+      PP.scale.pulseWinner('you');
+      PP.sound.play('coinBig');
+      el('gr-prompt').textContent = 'Your ' + myBid + ' tips the scale — you haul ' + haul + ' pts!';
     } else if (theirBid > myBid) {
       var theirHaul = myBid + theirBid + prize;
       S.them += theirHaul;
       S.carry = 0;
-      winPlate = botPlate;
-      roundSound = 'lifeLost';
-      el('gr-prompt').textContent = S.bot.name + '’s ' + theirBid + ' beats your ' + myBid + ' — they haul ' + theirHaul + ' pts.';
+      PP.scale.pulseWinner('them');
+      PP.sound.play('lifeLost');
+      el('gr-prompt').textContent = S.bot.name + '’s ' + theirBid + ' tips it — they haul ' + theirHaul + ' pts.';
     } else {
       S.carry += bonus;
-      el('gr-prompt').textContent = 'Dead heat at ' + myBid + '! Both bids are lost; the gold stays on the scale.';
+      PP.sound.play('push');
+      el('gr-prompt').textContent = 'Perfectly balanced at ' + myBid + '! Both bids are lost; the gold stays put.';
     }
-
-    var meReveal = S;   // pulse the winner once the toss lands
-    setTimeout(function () {
-      if (S !== meReveal) return;
-      if (winPlate) winPlate.classList.add('win');
-      PP.sound.play(roundSound);
-    }, 480);
 
     el('gr-score-you').textContent = S.you;
     el('gr-score-bot').textContent = S.them;
 
     S.round += 1;
-    var me = S;   // ignore this timer if the match was forfeited or replaced
+    var me = S;
     setTimeout(function () {
       if (S !== me) return;
       if (S.round >= 6) return finish();
       renderRound();
-    }, 1700);
+    }, 1500);
   }
 
   function finish() {

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Gold Rush scene preview</title>
+<style>
+  body { margin: 0; background: #0e2f1f; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  #stage { width: 760px; }
+  #stage svg { display: block; width: 100%; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script src="js/state.js"></script>
+<script src="js/sound.js"></script>
+<script src="js/nugget.js"></script>
+<script src="js/goldscene.js"></script>
+<script>
+  /* Dev harness: renders the Gold Rush scene in a fixed state for screenshots.
+     #idle    (default) round start, full pouches, bonus 4 with +2 carried
+     #reveal  mid-round: bids 5 vs 2 revealed, dropped, plank tipped         */
+  PP.sound.play = function () {};   // silence for headless runs
+  PP.goldscene.init(document.getElementById('stage'), { onBid: function () {} });
+  PP.goldscene.setRound({ bonus: 4, carry: 2, mine: [1, 2, 3, 4, 5, 6], theirs: [1, 2, 4, 5, 6], you: 9, them: 14 });
+  if (location.hash === '#reveal') {
+    PP.goldscene.pose(5, 2);          // static: bids on the tilted plank
+  } else if (location.hash === '#live') {
+    PP.goldscene.playRound(5, 2, { winner: 'you', youTotal: 22, themTotal: 14 }, function () {});
+  }
+</script>
+</body>
+</html>

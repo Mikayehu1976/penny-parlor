@@ -1,10 +1,9 @@
 /* Penny Parlor — Gold Rush: the canyon scene.
-   A full desert-dusk diorama in the spirit of the original Moola game:
-   sunset sky over dark mesas, a timbered mine entrance with a Gold Rush!
-   banner, an ore cart on rails, and a great wooden plank scale spanning
-   the canyon with You/Them weight signposts. Your nuggets wait in a
-   leather pouch in the foreground; bids perch as "?" nuggets beside the
-   mine, then flip, drop onto the plank, and tip it.
+   A desert-dusk diorama modeled on the original Moola Gold Rush:
+   sunset sky over dark mesas, a broad mine mesa with a timbered entrance
+   and Gold Rush! banner, an ore cart at the mouth, and a great wooden
+   plank scale on an A-frame trestle with You/Them lbs signposts.
+   Your nuggets wait in a leather pouch in the foreground.
 
    API:
      PP.goldscene.init(container, { onBid })   build the scene
@@ -20,9 +19,10 @@ window.PP = PP;
 (function () {
   var SVGNS = 'http://www.w3.org/2000/svg';
   var W = 760, H = 480;
-  var PIVOT = { x: 380, y: 319 }, PLANK_HALF = 240, LAND = 205;
-  var MAX_TILT = 9, TILT_PER = 2.4;
+  var PIVOT = { x: 380, y: 316 }, PLANK_HALF = 240, LAND = 200;
+  var MAX_TILT = 8, TILT_PER = 2.2;
   var SPRING = { k: 22, c: 2.6 };
+  var PERCH = { you: { x: 175, y: 244 }, them: { x: 585, y: 244 } };
 
   var NUGGET =
     '<path d="M50 7 L80 16 L93 48 L79 84 L44 93 L14 75 L7 38 Z" fill="#e8ac3a" stroke="#6b4a12" stroke-width="7" stroke-linejoin="round"/>' +
@@ -61,19 +61,18 @@ window.PP = PP;
   var angle = 0, vel = 0, target = 0;
   var anims = [];
   var lastT = null, rafId = null;
-  /* riders: nuggets currently sitting on the plank, as {g, offset, scale} */
-  var riders = [];
-  var bonusState = null;   // { value } when the bonus is riding the plank
+  var riders = [];        // nuggets riding the plank: {g, offset, scale, pulseAt}
+  var bonusState = null;
 
-  /* tween helper: works headless too (skips drawing, still calls done) */
+  /* t0 is stamped from the frame callback's own clock on the first frame,
+     so tweens stay sane even if performance.now and rAF disagree (headless) */
   function animate(dur, apply, done) {
     if (!hasRaf) { setTimeout(function () { if (done) done(); }, 0); return; }
-    anims.push({ t0: nowMs(), dur: dur, apply: apply, done: done });
+    anims.push({ t0: null, dur: dur, apply: apply, done: done });
   }
 
   function easeOut(k) { return k * (2 - k); }
 
-  /* run [ [delayMs, fn], ... ] with epoch protection */
   function chain(steps) {
     var myEpoch = epoch;
     var at = 0;
@@ -95,7 +94,7 @@ window.PP = PP;
     var svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, 'aria-label': 'Gold Rush canyon' });
     container.appendChild(svg);
 
-    /* ---- sky, sun-glow, mesas ---- */
+    /* ================= SKY ================= */
     var defs = mk('defs');
     defs.innerHTML =
       '<linearGradient id="gr-sky" x1="0" y1="0" x2="0" y2="1">' +
@@ -104,91 +103,89 @@ window.PP = PP;
       '<linearGradient id="gr-sand" x1="0" y1="0" x2="0" y2="1">' +
       '<stop offset="0" stop-color="#d89a5c"/><stop offset="1" stop-color="#c08147"/></linearGradient>';
     svg.appendChild(defs);
-    svg.appendChild(mk('rect', { x: 0, y: 0, width: W, height: 270, fill: 'url(#gr-sky)' }));
-    svg.appendChild(mk('circle', { cx: 615, cy: 96, r: 30, fill: '#f5b76a', opacity: 0.85 }));
-    svg.appendChild(mk('circle', { cx: 615, cy: 96, r: 46, fill: '#f5b76a', opacity: 0.25 }));
-    /* distant mesas */
-    svg.appendChild(mk('path', { d: 'M0 236 L40 236 L52 200 L96 200 L108 236 L200 236 L200 270 L0 270 Z', fill: '#4a1520' }));
-    svg.appendChild(mk('path', { d: 'M470 240 L510 240 L520 206 L560 206 L570 240 L640 240 L652 218 L688 218 L700 240 L760 240 L760 270 L470 270 Z', fill: '#4a1520' }));
+    svg.appendChild(mk('rect', { x: 0, y: 0, width: W, height: 272, fill: 'url(#gr-sky)' }));
+    svg.appendChild(mk('circle', { cx: 618, cy: 92, r: 34, fill: '#f0c58a' }));
+    svg.appendChild(mk('circle', { cx: 618, cy: 92, r: 48, fill: '#f0c58a', opacity: 0.22 }));
 
-    /* ---- canyon floor bands ---- */
-    svg.appendChild(mk('rect', { x: 0, y: 262, width: W, height: 120, fill: '#7d2418' }));
-    svg.appendChild(mk('path', { d: 'M0 262 Q190 250 380 262 T760 262 L760 276 L0 276 Z', fill: '#8f2a1c' }));
+    /* distant mesa silhouettes on the horizon */
+    svg.appendChild(mk('path', {
+      d: 'M0 244 L60 244 L74 216 L128 216 L142 244 L240 244 L240 272 L0 272 Z', fill: '#511822'
+    }));
+    svg.appendChild(mk('path', {
+      d: 'M470 248 L512 248 L524 222 L568 222 L580 248 L760 248 L760 272 L470 272 Z', fill: '#511822'
+    }));
 
-    /* ---- framing canyon walls ---- */
+    /* big soft canyon walls framing left and right — kept clear of the center */
     svg.appendChild(mk('path', {
-      d: 'M0 40 Q70 58 92 110 Q118 96 132 140 Q160 150 150 196 Q190 216 168 262 L0 262 Z',
-      fill: '#922b1e', stroke: '#5e1812', 'stroke-width': 4, 'stroke-linejoin': 'round'
+      d: 'M0 96 Q54 92 84 128 Q120 142 118 190 Q140 214 126 272 L0 272 Z',
+      fill: '#922b1e'
     }));
-    svg.appendChild(mk('path', { d: 'M0 96 Q46 108 60 150 Q84 158 78 200 L0 214 Z', fill: '#a83a26' }));
+    svg.appendChild(mk('path', { d: 'M0 130 Q40 130 58 162 Q80 176 74 220 L0 232 Z', fill: '#a83a26' }));
     svg.appendChild(mk('path', {
-      d: 'M760 30 Q700 52 684 104 Q652 96 640 146 Q610 158 622 200 Q580 220 604 262 L760 262 Z',
-      fill: '#922b1e', stroke: '#5e1812', 'stroke-width': 4, 'stroke-linejoin': 'round'
+      d: 'M760 88 Q706 86 678 124 Q642 138 646 188 Q622 212 636 272 L760 272 Z',
+      fill: '#922b1e'
     }));
-    svg.appendChild(mk('path', { d: 'M760 90 Q716 104 706 148 Q684 158 692 198 L760 210 Z', fill: '#a83a26' }));
+    svg.appendChild(mk('path', { d: 'M760 124 Q722 124 704 158 Q684 172 690 218 L760 228 Z', fill: '#a83a26' }));
+    /* one small cactus up on the left wall, against the sky */
+    svg.appendChild(mk('path', {
+      d: 'M56 96 L56 66 M56 78 Q44 78 44 68 M56 84 Q68 84 68 72',
+      fill: 'none', stroke: '#3f6b33', 'stroke-width': 7, 'stroke-linecap': 'round'
+    }));
 
-    /* ---- the mine: rock mound, timbered entrance, banner ---- */
+    /* ================= THE MINE MESA ================= */
+    /* broad flat-topped mesa, not a dome: reads as ground, not a head */
     svg.appendChild(mk('path', {
-      d: 'M262 262 Q268 170 320 128 Q380 96 440 128 Q492 170 498 262 Z',
-      fill: '#922b1e', stroke: '#5e1812', 'stroke-width': 4, 'stroke-linejoin': 'round'
+      d: 'M240 272 L252 176 Q256 148 290 144 L470 144 Q504 148 508 176 L520 272 Z',
+      fill: '#8f2a1c'
     }));
-    svg.appendChild(mk('path', { d: 'M300 262 Q308 190 348 158 Q330 210 328 262 Z', fill: '#a83a26' }));
-    /* entrance */
-    svg.appendChild(mk('path', {
-      d: 'M334 252 L334 176 Q380 148 426 176 L426 252 Z',
-      fill: '#160b06'
-    }));
-    svg.appendChild(mk('ellipse', { cx: 380, cy: 250, rx: 40, ry: 8, fill: '#f0c368', opacity: 0.14 }));
-    /* timber frame */
-    svg.appendChild(mk('rect', { x: 326, y: 168, width: 12, height: 88, fill: '#9a6a33', stroke: '#5f3c18', 'stroke-width': 3 }));
-    svg.appendChild(mk('rect', { x: 422, y: 168, width: 12, height: 88, fill: '#9a6a33', stroke: '#5f3c18', 'stroke-width': 3 }));
-    svg.appendChild(mk('rect', { x: 316, y: 156, width: 128, height: 14, rx: 3, fill: '#9a6a33', stroke: '#5f3c18', 'stroke-width': 3 }));
-    /* banner */
-    var banner = mk('g', { transform: 'rotate(-2 380 118)' });
+    svg.appendChild(mk('path', { d: 'M262 272 L272 186 Q276 164 300 160 L318 160 Q300 176 296 210 L290 272 Z', fill: '#a83a26' }));
+
+    /* timbered entrance */
+    svg.appendChild(mk('rect', { x: 336, y: 168, width: 88, height: 88, fill: '#160b06' }));
+    svg.appendChild(mk('ellipse', { cx: 380, cy: 254, rx: 34, ry: 7, fill: '#f0c368', opacity: 0.15 }));
+    svg.appendChild(mk('rect', { x: 326, y: 168, width: 13, height: 92, fill: '#9a6a33', stroke: '#5f3c18', 'stroke-width': 3 }));
+    svg.appendChild(mk('rect', { x: 421, y: 168, width: 13, height: 92, fill: '#9a6a33', stroke: '#5f3c18', 'stroke-width': 3 }));
+    svg.appendChild(mk('rect', { x: 318, y: 154, width: 124, height: 16, rx: 3, fill: '#9a6a33', stroke: '#5f3c18', 'stroke-width': 3 }));
+
+    /* banner arched over the mesa top */
+    var banner = mk('g');
     banner.appendChild(mk('path', {
-      d: 'M306 132 Q380 106 454 132 L448 108 Q380 84 312 108 Z',
+      d: 'M300 134 Q380 108 460 134 L454 106 Q380 82 306 106 Z',
       fill: '#8a5a2b', stroke: '#5f3c18', 'stroke-width': 3, 'stroke-linejoin': 'round'
     }));
     var bt = mk('text', {
-      x: 380, y: 122, 'text-anchor': 'middle', 'font-family': 'Georgia', 'font-size': 20,
+      x: 380, y: 122, 'text-anchor': 'middle', 'font-family': 'Georgia', 'font-size': 21,
       'font-weight': 'bold', fill: '#f0c368', stroke: '#5f3c18', 'stroke-width': 0.8
     });
     bt.textContent = 'Gold Rush!';
     banner.appendChild(bt);
     svg.appendChild(banner);
 
-    /* ---- rails + ore cart ---- */
-    svg.appendChild(mk('path', { d: 'M356 252 L338 300', stroke: '#5f3c18', 'stroke-width': 4 }));
-    svg.appendChild(mk('path', { d: 'M404 252 L422 300', stroke: '#5f3c18', 'stroke-width': 4 }));
-    svg.appendChild(mk('path', { d: 'M350 266 L410 266 M344 282 L416 282 M340 296 L420 296', stroke: '#5f3c18', 'stroke-width': 3 }));
+    /* ore cart at the mine mouth, sitting on rails on the ground */
+    svg.appendChild(mk('path', { d: 'M340 268 L420 268', stroke: '#5f3c18', 'stroke-width': 4 }));
+    svg.appendChild(mk('path', { d: 'M348 268 L348 262 M368 268 L368 262 M392 268 L392 262 M412 268 L412 262', stroke: '#5f3c18', 'stroke-width': 3 }));
     var cart = mk('g');
-    cart.appendChild(mk('path', { d: 'M348 226 L412 226 L404 254 L356 254 Z', fill: '#7a4a26', stroke: '#4a2c12', 'stroke-width': 3, 'stroke-linejoin': 'round' }));
-    cart.appendChild(mk('circle', { cx: 362, cy: 258, r: 6, fill: '#3a2415', stroke: '#160b06', 'stroke-width': 2 }));
-    cart.appendChild(mk('circle', { cx: 398, cy: 258, r: 6, fill: '#3a2415', stroke: '#160b06', 'stroke-width': 2 }));
-    cart.appendChild(mk('path', { d: 'M352 226 Q362 210 374 222 Q380 206 392 220 Q402 210 408 226 Z', fill: '#e8ac3a', stroke: '#6b4a12', 'stroke-width': 2.5 }));
-    cart.appendChild(mk('path', { d: 'M370 214 L372 219 L377 220 L372 222 L370 227 L368 222 L363 220 L368 219 Z', fill: '#fffbe8' }));
+    cart.appendChild(mk('path', { d: 'M350 232 L410 232 L403 258 L357 258 Z', fill: '#7a4a26', stroke: '#4a2c12', 'stroke-width': 3, 'stroke-linejoin': 'round' }));
+    cart.appendChild(mk('circle', { cx: 364, cy: 261, r: 6, fill: '#3a2415', stroke: '#160b06', 'stroke-width': 2 }));
+    cart.appendChild(mk('circle', { cx: 396, cy: 261, r: 6, fill: '#3a2415', stroke: '#160b06', 'stroke-width': 2 }));
+    cart.appendChild(mk('path', { d: 'M354 232 Q364 216 376 228 Q382 212 394 226 Q404 216 406 232 Z', fill: '#e8ac3a', stroke: '#6b4a12', 'stroke-width': 2.5 }));
+    cart.appendChild(mk('path', { d: 'M372 219 L374 224 L379 225 L374 227 L372 232 L370 227 L365 225 L370 224 Z', fill: '#fffbe8' }));
     svg.appendChild(cart);
 
-    /* ---- fulcrum + plank ---- */
-    svg.appendChild(mk('path', {
-      d: 'M352 372 Q356 330 380 326 Q404 330 408 372 Z',
-      fill: '#6e1e16', stroke: '#4a1510', 'stroke-width': 3, 'stroke-linejoin': 'round'
-    }));
-    var plank = mk('g');
-    plank.appendChild(mk('rect', {
-      x: PIVOT.x - PLANK_HALF, y: PIVOT.y - 7, width: PLANK_HALF * 2, height: 14, rx: 6,
-      fill: '#a8703a', stroke: '#5f3c18', 'stroke-width': 3.5
-    }));
-    plank.appendChild(mk('path', {
-      d: 'M' + (PIVOT.x - PLANK_HALF + 18) + ' ' + PIVOT.y + ' L' + (PIVOT.x - 40) + ' ' + PIVOT.y +
-      ' M' + (PIVOT.x + 40) + ' ' + PIVOT.y + ' L' + (PIVOT.x + PLANK_HALF - 18) + ' ' + PIVOT.y,
-      stroke: '#8a5a2b', 'stroke-width': 2.5
-    }));
-    svg.appendChild(plank);
+    /* ================= MID-GROUND FLOOR ================= */
+    svg.appendChild(mk('rect', { x: 0, y: 272, width: W, height: 112, fill: '#7d2418' }));
+    svg.appendChild(mk('path', { d: 'M0 272 Q190 264 380 272 T760 272 L760 284 L0 284 Z', fill: '#8f2a1c' }));
 
-    /* ---- perch rocks + hidden-bid nuggets ---- */
-    svg.appendChild(mk('path', { d: 'M212 216 Q226 186 252 194 Q272 200 266 224 L216 226 Z', fill: '#7d2418', stroke: '#4a1510', 'stroke-width': 3 }));
-    svg.appendChild(mk('path', { d: 'M494 224 Q504 190 532 194 Q552 202 546 224 L498 228 Z', fill: '#7d2418', stroke: '#4a1510', 'stroke-width': 3 }));
+    /* ================= PERCH ROCKS for the ? bids ================= */
+    /* low, wide outcrops well away from the mine so they read as their own rocks */
+    svg.appendChild(mk('path', {
+      d: 'M136 272 Q140 240 175 236 Q212 240 216 272 Z',
+      fill: '#6e1e16'
+    }));
+    svg.appendChild(mk('path', {
+      d: 'M546 272 Q550 240 585 236 Q620 240 624 272 Z',
+      fill: '#6e1e16'
+    }));
     var perchYou = nug(46);
     var perchThem = nug(46);
     perchYou.setAttribute('display', 'none');
@@ -196,77 +193,98 @@ window.PP = PP;
     svg.appendChild(perchYou);
     svg.appendChild(perchThem);
 
-    /* ---- signposts ---- */
+    /* ================= TRESTLE + PLANK ================= */
+    svg.appendChild(mk('path', {
+      d: 'M380 320 L354 376 M380 320 L406 376 M362 358 L398 358',
+      stroke: '#5f3c18', 'stroke-width': 7, 'stroke-linecap': 'round', fill: 'none'
+    }));
+    var plank = mk('g');
+    plank.appendChild(mk('rect', {
+      x: PIVOT.x - PLANK_HALF, y: PIVOT.y - 10, width: PLANK_HALF * 2, height: 20, rx: 8,
+      fill: '#c08850', stroke: '#5f3c18', 'stroke-width': 4
+    }));
+    plank.appendChild(mk('path', {
+      d: 'M' + (PIVOT.x - PLANK_HALF + 22) + ' ' + (PIVOT.y - 3) + ' L' + (PIVOT.x - 46) + ' ' + (PIVOT.y - 3) +
+      ' M' + (PIVOT.x + 46) + ' ' + (PIVOT.y - 3) + ' L' + (PIVOT.x + PLANK_HALF - 22) + ' ' + (PIVOT.y - 3) +
+      ' M' + (PIVOT.x - PLANK_HALF + 40) + ' ' + (PIVOT.y + 4) + ' L' + (PIVOT.x - 80) + ' ' + (PIVOT.y + 4) +
+      ' M' + (PIVOT.x + 80) + ' ' + (PIVOT.y + 4) + ' L' + (PIVOT.x + PLANK_HALF - 40) + ' ' + (PIVOT.y + 4),
+      stroke: '#9a6a33', 'stroke-width': 2.5
+    }));
+    svg.appendChild(plank);
+
+    /* ================= SIGNPOSTS ================= */
     function signpost(cx, label) {
       var g = mk('g');
-      g.appendChild(mk('rect', { x: cx - 5, y: 300, width: 10, height: 70, fill: '#8a5a2b', stroke: '#5f3c18', 'stroke-width': 2.5 }));
-      g.appendChild(mk('rect', { x: cx - 47, y: 286, width: 94, height: 46, rx: 5, fill: '#c8935a', stroke: '#5f3c18', 'stroke-width': 3 }));
-      var t1 = mk('text', { x: cx, y: 305, 'text-anchor': 'middle', 'font-family': 'Georgia', 'font-size': 14, 'font-weight': 'bold', fill: '#4a2405' });
+      g.appendChild(mk('rect', { x: cx - 5, y: 332, width: 10, height: 44, fill: '#8a5a2b', stroke: '#5f3c18', 'stroke-width': 2.5 }));
+      g.appendChild(mk('rect', { x: cx - 48, y: 284, width: 96, height: 50, rx: 5, fill: '#c8935a', stroke: '#5f3c18', 'stroke-width': 3 }));
+      var t1 = mk('text', { x: cx, y: 305, 'text-anchor': 'middle', 'font-family': 'Georgia', 'font-size': 15, 'font-weight': 'bold', fill: '#4a2405' });
       t1.textContent = label;
-      var t2 = mk('text', { x: cx, y: 325, 'text-anchor': 'middle', 'font-family': 'Georgia', 'font-size': 16, 'font-weight': 'bold', fill: '#4a2405' });
+      var t2 = mk('text', { x: cx, y: 326, 'text-anchor': 'middle', 'font-family': 'Georgia', 'font-size': 17, 'font-weight': 'bold', fill: '#4a2405' });
       t2.textContent = '0 lbs';
       g.appendChild(t1); g.appendChild(t2);
       svg.appendChild(g);
       return t2;
     }
-    var lbsYou = signpost(92, 'You:');
-    var lbsThem = signpost(668, 'Them:');
+    var lbsYou = signpost(70, 'You:');
+    var lbsThem = signpost(690, 'Them:');
 
-    /* ---- foreground sand ---- */
-    svg.appendChild(mk('path', { d: 'M0 382 Q190 368 380 380 T760 378 L760 480 L0 480 Z', fill: 'url(#gr-sand)' }));
-    svg.appendChild(mk('ellipse', { cx: 470, cy: 420, rx: 60, ry: 8, fill: '#e6b678', opacity: 0.7 }));
-    svg.appendChild(mk('ellipse', { cx: 200, cy: 400, rx: 40, ry: 6, fill: '#e6b678', opacity: 0.7 }));
+    /* ================= FOREGROUND SAND ================= */
+    svg.appendChild(mk('path', { d: 'M0 384 Q190 372 380 382 T760 380 L760 480 L0 480 Z', fill: 'url(#gr-sand)' }));
+    svg.appendChild(mk('ellipse', { cx: 470, cy: 414, rx: 56, ry: 7, fill: '#e6b678', opacity: 0.7 }));
+    svg.appendChild(mk('ellipse', { cx: 150, cy: 396, rx: 36, ry: 5, fill: '#e6b678', opacity: 0.7 }));
+    svg.appendChild(mk('ellipse', { cx: 420, cy: 442, rx: 7, ry: 4, fill: '#a06c3c' }));
+    svg.appendChild(mk('ellipse', { cx: 444, cy: 452, rx: 5, ry: 3, fill: '#a06c3c' }));
 
-    /* ---- props ---- */
-    /* barrel + agave, left */
-    svg.appendChild(mk('rect', { x: 30, y: 322, width: 46, height: 52, rx: 8, fill: '#8a5a2b', stroke: '#5f3c18', 'stroke-width': 3 }));
-    svg.appendChild(mk('path', { d: 'M30 338 L76 338 M30 358 L76 358', stroke: '#5f3c18', 'stroke-width': 2.5 }));
+    /* ================= PROPS (foreground, clear of signs and pouches) ================= */
+    /* barrel + agave, mid-ground far left, tucked below the You sign */
+    svg.appendChild(mk('rect', { x: 10, y: 402, width: 44, height: 50, rx: 8, fill: '#8a5a2b', stroke: '#5f3c18', 'stroke-width': 3 }));
+    svg.appendChild(mk('path', { d: 'M10 418 L54 418 M10 438 L54 438', stroke: '#5f3c18', 'stroke-width': 2.5 }));
     svg.appendChild(mk('path', {
-      d: 'M53 322 L40 296 L50 318 L53 290 L57 318 L67 298 L56 322 Z',
+      d: 'M32 402 L20 378 L29 398 L32 372 L36 398 L45 380 L35 402 Z',
       fill: '#6da34f', stroke: '#3f7a33', 'stroke-width': 2, 'stroke-linejoin': 'round'
     }));
-    /* cactus */
-    svg.appendChild(mk('path', {
-      d: 'M158 320 L158 276 Q158 266 166 266 Q174 266 174 276 L174 320 M158 292 Q144 292 144 282 Q144 274 150 274 M174 300 Q188 300 188 288 Q188 280 182 280',
-      fill: 'none', stroke: '#4f8f3f', 'stroke-width': 9, 'stroke-linecap': 'round'
-    }));
-    /* TNT crate + skull, right */
-    svg.appendChild(mk('rect', { x: 648, y: 326, width: 62, height: 46, rx: 4, fill: '#a03325', stroke: '#4a1510', 'stroke-width': 3 }));
-    var tnt = mk('text', { x: 679, y: 356, 'text-anchor': 'middle', 'font-family': 'Georgia', 'font-size': 16, 'font-weight': 'bold', fill: '#f3e6c8' });
+    /* TNT crate + cow skull, mid-ground far right beyond the Them sign */
+    svg.appendChild(mk('rect', { x: 700, y: 398, width: 54, height: 44, rx: 4, fill: '#a03325', stroke: '#4a1510', 'stroke-width': 3 }));
+    var tnt = mk('text', { x: 727, y: 426, 'text-anchor': 'middle', 'font-family': 'Georgia', 'font-size': 14, 'font-weight': 'bold', fill: '#f3e6c8' });
     tnt.textContent = 'TNT';
     svg.appendChild(tnt);
     svg.appendChild(mk('path', {
-      d: 'M664 318 Q660 306 670 304 Q668 296 678 296 Q688 296 686 304 Q696 306 692 318 Q686 326 678 326 Q670 326 664 318 Z',
+      d: 'M714 394 Q710 382 720 380 Q718 372 728 372 Q738 372 736 380 Q746 382 742 394 Q736 402 728 402 Q720 402 714 394 Z',
       fill: '#f3e6c8', stroke: '#b8a888', 'stroke-width': 2
     }));
-    svg.appendChild(mk('circle', { cx: 673, cy: 310, r: 2.6, fill: '#4a2405' }));
-    svg.appendChild(mk('circle', { cx: 683, cy: 310, r: 2.6, fill: '#4a2405' }));
-    /* lizard, bottom right */
+    svg.appendChild(mk('circle', { cx: 723, cy: 386, r: 2.4, fill: '#4a2405' }));
+    svg.appendChild(mk('circle', { cx: 733, cy: 386, r: 2.4, fill: '#4a2405' }));
+    /* gecko sunning on the open sand, mid-right (top view: body, curled tail, four legs) */
     var lizard = mk('g');
     lizard.appendChild(mk('path', {
-      d: 'M600 458 Q616 448 634 454 Q652 460 664 452 Q676 444 688 450',
-      fill: 'none', stroke: '#e8823a', 'stroke-width': 9, 'stroke-linecap': 'round'
+      d: 'M497 446 Q514 442 524 450 Q532 458 526 462 Q520 464 518 458 Q516 452 506 452',
+      fill: 'none', stroke: '#e8823a', 'stroke-width': 6, 'stroke-linecap': 'round'
     }));
-    lizard.appendChild(mk('circle', { cx: 600, cy: 456, r: 7, fill: '#e8823a' }));
-    lizard.appendChild(mk('circle', { cx: 597, cy: 453, r: 1.8, fill: '#4a2405' }));
-    lizard.appendChild(mk('path', { d: 'M622 460 L616 470 M640 460 L636 470 M654 452 L650 462 M666 450 L662 460', stroke: '#c05f1e', 'stroke-width': 3, 'stroke-linecap': 'round' }));
+    lizard.appendChild(mk('ellipse', { cx: 478, cy: 448, rx: 22, ry: 10, fill: '#e8823a', stroke: '#c05f1e', 'stroke-width': 2.5 }));
+    lizard.appendChild(mk('ellipse', { cx: 452, cy: 448, rx: 9, ry: 7, fill: '#e8823a', stroke: '#c05f1e', 'stroke-width': 2.5 }));
+    lizard.appendChild(mk('circle', { cx: 449, cy: 444, r: 1.8, fill: '#4a2405' }));
+    lizard.appendChild(mk('circle', { cx: 449, cy: 452, r: 1.8, fill: '#4a2405' }));
+    lizard.appendChild(mk('path', {
+      d: 'M466 440 L458 432 M490 440 L496 432 M466 456 L458 464 M490 456 L496 464',
+      stroke: '#c05f1e', 'stroke-width': 4, 'stroke-linecap': 'round'
+    }));
     svg.appendChild(lizard);
 
-    /* ---- your pouch ---- */
+    /* ================= YOUR POUCH ================= */
     svg.appendChild(mk('path', {
-      d: 'M28 410 Q180 396 336 404 Q352 436 340 468 Q180 478 34 470 Q18 438 28 410 Z',
+      d: 'M62 400 Q210 388 364 396 Q380 434 366 470 Q210 480 68 472 Q50 436 62 400 Z',
       fill: '#c08850', stroke: '#7a4a26', 'stroke-width': 4, 'stroke-linejoin': 'round'
     }));
     svg.appendChild(mk('path', {
-      d: 'M40 418 Q180 406 326 412 Q338 438 330 460 Q180 470 44 462 Q34 438 40 418 Z',
+      d: 'M74 410 Q210 398 352 406 Q364 436 354 460 Q210 470 80 462 Q66 436 74 410 Z',
       fill: 'none', stroke: '#7a4a26', 'stroke-width': 2, 'stroke-dasharray': '6 5'
     }));
     var pouchSlots = [];
     for (var i = 0; i < 6; i++) {
-      var sx = 70 + i * 46, sy = 440;
-      svg.appendChild(mk('ellipse', { cx: sx, cy: sy + 8, rx: 20, ry: 9, fill: '#a06c3c' }));
-      var slot = nug(46);
-      slot.setAttribute('transform', 'translate(' + (sx - 17) + ' ' + (sy - 22) + ') scale(0.34)');
+      var sx = 106 + i * 45, sy = 434;
+      svg.appendChild(mk('ellipse', { cx: sx, cy: sy + 12, rx: 23, ry: 10, fill: '#a06c3c' }));
+      var slot = nug(48);
+      slot.setAttribute('transform', 'translate(' + (sx - 22) + ' ' + (sy - 32) + ') scale(0.44)');
       slot.setAttribute('cursor', 'pointer');
       slot.querySelector('text').textContent = i + 1;
       (function (val, s) {
@@ -276,28 +294,28 @@ window.PP = PP;
       pouchSlots.push(slot);
     }
 
-    /* ---- their mini pouch ---- */
+    /* ================= THEIR MINI POUCH ================= */
     svg.appendChild(mk('path', {
-      d: 'M560 444 Q645 438 732 444 Q740 460 732 472 Q645 478 562 472 Q554 458 560 444 Z',
-      fill: '#c08850', stroke: '#7a4a26', 'stroke-width': 3
+      d: 'M556 452 Q650 444 744 452 Q752 466 744 476 Q650 482 558 476 Q548 464 556 452 Z',
+      fill: '#c08850', stroke: '#7a4a26', 'stroke-width': 3, 'stroke-linejoin': 'round'
     }));
-    var theirLabel = mk('text', { x: 646, y: 440, 'text-anchor': 'middle', 'font-family': 'Georgia', 'font-size': 10, 'font-weight': 'bold', 'letter-spacing': 1.5, fill: '#7a4a26' });
+    var theirLabel = mk('text', { x: 649, y: 446, 'text-anchor': 'middle', 'font-family': 'Georgia', 'font-size': 11, 'font-weight': 'bold', 'letter-spacing': 1.5, fill: '#f3e6c8', opacity: 0.85 });
     theirLabel.textContent = 'THEIR POUCH';
     svg.appendChild(theirLabel);
     var theirSlots = [];
     for (var j = 0; j < 6; j++) {
-      var mini = nug(50);
-      mini.setAttribute('transform', 'translate(' + (570 + j * 27) + ' 448) scale(0.17)');
+      var mini = nug(52);
+      mini.setAttribute('transform', 'translate(' + (566 + j * 29) + ' 450) scale(0.27)');
       mini.querySelector('text').textContent = j + 1;
       svg.appendChild(mini);
       theirSlots.push(mini);
     }
 
-    /* ---- bonus nugget + carry tag (rides the plank center) ---- */
+    /* ================= BONUS + CARRY TAG ================= */
     var bonus = nug(48);
     bonus.setAttribute('display', 'none');
     svg.appendChild(bonus);
-    var carryTag = mk('text', { x: PIVOT.x + 30, y: 286, 'font-family': 'Georgia', 'font-size': 15, 'font-weight': 'bold', fill: '#f0c368', stroke: '#5f3c18', 'stroke-width': 0.6 });
+    var carryTag = mk('text', { x: PIVOT.x + 24, y: 296, 'font-family': 'Georgia', 'font-size': 16, 'font-weight': 'bold', fill: '#f0c368', stroke: '#5f3c18', 'stroke-width': 0.6 });
     svg.appendChild(carryTag);
 
     V = {
@@ -328,11 +346,17 @@ window.PP = PP;
   function placeRider(r, now) {
     var p = plankPoint(r.offset);
     var sc = r.scale;
+    if (r.pulseAt === -1) r.pulseAt = now;   // -1: start the pulse on the next frame's clock
     if (r.pulseAt && now - r.pulseAt < 700) {
       sc *= 1 + 0.16 * Math.abs(Math.sin((now - r.pulseAt) / 700 * Math.PI * 2));
     }
     r.g.setAttribute('transform',
-      'translate(' + (p.x - 50 * sc) + ' ' + (p.y - 9 - 100 * sc) + ') scale(' + sc + ')');
+      'translate(' + (p.x - 50 * sc) + ' ' + (p.y - 10 - 100 * sc) + ') scale(' + sc + ')');
+  }
+
+  function perchTransform(which) {
+    var p = PERCH[which];
+    return 'translate(' + (p.x - 21) + ' ' + (p.y - 46) + ') scale(0.42)';
   }
 
   /* ---------------- frame loop ---------------- */
@@ -353,12 +377,12 @@ window.PP = PP;
       var wob = Math.sin(now / 480) * 4;
       var p = plankPoint(0);
       V.bonus.setAttribute('transform',
-        'translate(' + (p.x - 50 * 0.36) + ' ' + (p.y - 9 - 100 * 0.36) + ') scale(0.36) rotate(' + wob + ' 50 100)');
+        'translate(' + (p.x - 50 * 0.36) + ' ' + (p.y - 10 - 100 * 0.36) + ') scale(0.36) rotate(' + wob + ' 50 100)');
     }
 
-    /* tweens */
     for (var a = anims.length - 1; a >= 0; a--) {
       var tw = anims[a];
+      if (tw.t0 === null) tw.t0 = now;
       var k = Math.min(1, (now - tw.t0) / tw.dur);
       tw.apply(easeOut(k));
       if (k >= 1) {
@@ -377,29 +401,26 @@ window.PP = PP;
     riders = [];
     target = 0;
 
-    /* pouch: show remaining, dim the spent */
     pouchVals = o.mine.slice();
     V.pouchSlots.forEach(function (slot, idx) {
       var have = o.mine.indexOf(idx + 1) !== -1;
-      slot.setAttribute('opacity', have ? 1 : 0.28);
+      slot.setAttribute('opacity', have ? 1 : 0.25);
       slot.setAttribute('cursor', have ? 'pointer' : 'default');
     });
     V.theirSlots.forEach(function (mini, idx) {
-      mini.setAttribute('opacity', o.theirs.indexOf(idx + 1) !== -1 ? 1 : 0.28);
+      mini.setAttribute('opacity', o.theirs.indexOf(idx + 1) !== -1 ? 1 : 0.25);
     });
 
     V.lbsYou.textContent = o.you + ' lbs';
     V.lbsThem.textContent = o.them + ' lbs';
 
-    /* the "?" bids take their perches */
     V.perchYouText.textContent = '?';
     V.perchThemText.textContent = '?';
     V.perchYou.setAttribute('display', '');
     V.perchThem.setAttribute('display', '');
-    V.perchYou.setAttribute('transform', 'translate(' + (238 - 21) + ' 148) scale(0.42)');
-    V.perchThem.setAttribute('transform', 'translate(' + (520 - 21) + ' 148) scale(0.42)');
+    V.perchYou.setAttribute('transform', perchTransform('you'));
+    V.perchThem.setAttribute('transform', perchTransform('them'));
 
-    /* bonus drops onto the plank center */
     bonusState = { value: o.bonus };
     V.bonus.setAttribute('display', '');
     V.bonusText.textContent = o.bonus;
@@ -428,9 +449,8 @@ window.PP = PP;
     var myEpoch = epoch;
     pouchEnabled = false;
 
-    /* dim the spent pouch nugget right away */
     var spent = V.pouchSlots[my - 1];
-    spent.setAttribute('opacity', 0.28);
+    spent.setAttribute('opacity', 0.25);
     spent.setAttribute('cursor', 'default');
 
     var landed = 0;
@@ -443,25 +463,25 @@ window.PP = PP;
     }
 
     chain([
-      [420, function () {   /* flip both ? nuggets to their values */
+      [420, function () {
         PP.sound.play('flip');
         V.perchYouText.textContent = my;
         V.perchThemText.textContent = their;
       }],
-      [420, function () {   /* both bids arc down onto the plank */
+      [420, function () {
         var pl = plankPoint(-LAND), pr = plankPoint(LAND);
-        arcTo(V.perchYou, { x: 238, y: 190 }, { x: pl.x, y: pl.y - 9 }, 0.38, 480, function () {
+        arcTo(V.perchYou, { x: PERCH.you.x, y: PERCH.you.y }, { x: pl.x, y: pl.y - 10 }, 0.38, 480, function () {
           if (epoch !== myEpoch) return;
           riders.push({ g: V.perchYou, offset: -LAND, scale: 0.38, pulseAt: 0 });
           onLand();
         });
-        arcTo(V.perchThem, { x: 520, y: 190 }, { x: pr.x, y: pr.y - 9 }, 0.38, 480, function () {
+        arcTo(V.perchThem, { x: PERCH.them.x, y: PERCH.them.y }, { x: pr.x, y: pr.y - 10 }, 0.38, 480, function () {
           if (epoch !== myEpoch) return;
           riders.push({ g: V.perchThem, offset: LAND, scale: 0.38, pulseAt: 0 });
           onLand();
         });
       }],
-      [1550, function () {  /* settled: celebrate, update signposts, clear the plank */
+      [1550, function () {
         V.lbsYou.textContent = result.youTotal + ' lbs';
         V.lbsThem.textContent = result.themTotal + ' lbs';
         if (result.winner === 'tie') {
@@ -474,7 +494,7 @@ window.PP = PP;
           for (var i = 0; i < riders.length; i++) {
             if ((result.winner === 'you') === (riders[i].offset < 0)) winRider = riders[i];
           }
-          if (winRider) winRider.pulseAt = nowMs();
+          if (winRider) winRider.pulseAt = -1;
           setTimeout(function () {
             if (epoch !== myEpoch) return;
             animate(400, function (k) {
@@ -503,10 +523,36 @@ window.PP = PP;
     target = 0;
   }
 
+  /* Static pose for screenshots/dev: both bids sitting on the tilted plank,
+     no animation clocks involved. */
+  function pose(my, their) {
+    if (!V) return;
+    pouchEnabled = false;
+    V.pouchSlots[my - 1].setAttribute('opacity', 0.25);
+    angle = Math.max(-MAX_TILT, Math.min(MAX_TILT, -(my - their) * TILT_PER));
+    vel = 0; target = angle;
+    V.plank.setAttribute('transform', 'rotate(' + angle + ' ' + PIVOT.x + ' ' + PIVOT.y + ')');
+    V.perchYouText.textContent = my;
+    V.perchThemText.textContent = their;
+    V.perchYou.setAttribute('display', '');
+    V.perchThem.setAttribute('display', '');
+    riders = [
+      { g: V.perchYou, offset: -LAND, scale: 0.38, pulseAt: 0 },
+      { g: V.perchThem, offset: LAND, scale: 0.38, pulseAt: 0 }
+    ];
+    riders.forEach(function (r) { placeRider(r, 0); });
+    if (bonusState) {
+      var p = plankPoint(0);
+      V.bonus.setAttribute('transform',
+        'translate(' + (p.x - 50 * 0.36) + ' ' + (p.y - 10 - 100 * 0.36) + ') scale(0.36)');
+    }
+  }
+
   PP.goldscene = {
     init: init,
     setRound: setRound,
     playRound: playRound,
+    pose: pose,
     bid: bid,
     remaining: function () { return pouchVals.slice(); }
   };
